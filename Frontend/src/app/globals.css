@@ -1,0 +1,177 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+@theme {
+  --color-background: #f1f8e9;
+  --color-foreground: #1a2e1f;
+  --color-primary: #2fa84f;
+  --color-secondary: #268c41;
+  --color-muted: #6b7c71;
+  --color-border: #e0e6e2;
+}
+
+:root {
+  /* Make Tailwind's `font-sans` utility use Plus Jakarta globally */
+  --font-sans: var(--font-plus-jakarta);
+}
+
+body {
+  background-color: #f1f8e9;
+  color: #1a2e1f;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-plus-jakarta), "Plus Jakarta Sans", Inter, ui-sans-serif,
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(12px, -18px) scale(1.05);
+  }
+}
+
+@keyframes float-slower {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-16px, 14px) scale(1.08);
+  }
+}
+
+.animate-float-slow {
+  animation: float-slow 9s ease-in-out infinite;
+}
+
+.animate-float-slower {
+  animation: float-slower 12s ease-in-out infinite;
+}
+
+@keyframes gradient-shine {
+  0% {
+    background-position: 0% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.gradient-text-shine {
+  background-image: linear-gradient(
+    90deg,
+    #2fa84f 0%,
+    #7ee8a0 35%,
+    #2fa84f 70%,
+    #5ee88a 100%
+  );
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: gradient-shine 4s linear infinite;
+}
+
+.mesh-grid {
+  background-image: linear-gradient(rgba(47, 168, 79, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(47, 168, 79, 0.04) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+@layer components {
+  /* Masukkan class custom kamu di sini tanpa @apply m-0 */
+  .navbar-custom {
+    @apply fixed top-0 w-full z-50 transition-all duration-300 py-5 bg-transparent;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(60px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  opacity: 0;
+  animation: fadeInUp 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.animate-fade-in {
+  opacity: 0;
+  animation: fadeIn 0.35s ease-out forwards;
+}
+
+.animate-slide-in-left {
+  opacity: 0;
+  animation: slideInLeft 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.animate-slide-in-up {
+  opacity: 0;
+  animation: slideInUp 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+/* For register-penjual which has slower timings */
+.animate-fade-in-up-slow {
+  opacity: 0;
+  animation: fadeInUp 1s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+.animate-slide-in-left-slow {
+  opacity: 0;
+  animation: slideInLeft 1s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+.animate-fade-in-slow {
+  opacity: 0;
+  animation: fadeIn 1s ease-out forwards;
+}
