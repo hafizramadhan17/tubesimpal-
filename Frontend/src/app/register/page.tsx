@@ -285,7 +285,7 @@ export default function RegisterPage() {
 
     setIsSubmitting(true);
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/register`, {
+      const response = await fetch("https://greenmarket-backend-7o2xj2169.vercel.app/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -407,7 +407,7 @@ export default function RegisterPage() {
                     <path d="M12 2L3 7v9c0 5 9 7 9 7s9-2 9-7V7l-9-5z" />
                   </svg>
                 </motion.div>
-                <span className="text-xl font-extrabold tracking-tight text-white">ReUseMarket</span>
+                <span className="text-xl font-extrabold tracking-tight text-white">GreenMarket</span>
               </Link>
             </motion.div>
 

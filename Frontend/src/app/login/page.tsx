@@ -8,8 +8,6 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { useToast } from "@/hooks/useToast";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://ReUseMarket-backend-7o2xj2169.vercel.app";
-
 interface LoginResponse {
   message?: string;
   user?: {
@@ -298,7 +296,7 @@ export default function LoginPage() {
         localStorage.setItem("rememberedEmail", rememberedEmail);
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/guest`, {
+      const response = await fetch("https://greenmarket-backend-7o2xj2169.vercel.app/guest", {
         method: "POST",
       });
 
@@ -342,7 +340,7 @@ export default function LoginPage() {
         localStorage.setItem("rememberedEmail", rememberedEmail);
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/login`, {
+      const response = await fetch("https://greenmarket-backend-7o2xj2169.vercel.app/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -492,7 +490,7 @@ export default function LoginPage() {
                   </svg>
                 </motion.div>
 
-                <span className="text-xl font-extrabold tracking-tight text-white">ReUseMarket</span>
+                <span className="text-xl font-extrabold tracking-tight text-white">GreenMarket</span>
               </Link>
             </motion.div>
 
