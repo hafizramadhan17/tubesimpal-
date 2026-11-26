@@ -10,7 +10,7 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "ReUseMarket - Solusi Ramah Lingkungan",
+  title: "GreenMarket - Solusi Ramah Lingkungan",
   description: "Platform marketplace untuk daur ulang dan jual beli barang bekas",
 };
 

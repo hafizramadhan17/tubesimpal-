@@ -5,9 +5,6 @@ require("dotenv").config();
 
 // Import routes
 const authRoutes = require("./routes/authRoutes");
-
-//yang bawah ini disediain dulu
-/*
 const userRoutes = require("./routes/userRoutes");
 const addressRoutes = require("./routes/addressRoutes");
 const adminRoutes = require("./routes/adminRoutes");
@@ -17,7 +14,6 @@ const keranjangRoutes = require("./routes/keranjangRoutes");
 const jasaKirimRoutes = require("./routes/jasakirimRoutes");
 const metodePembayaranRoutes = require("./routes/metodepembayaranRoutes");
 const transaksiRoutes = require("./routes/transaksiRoutes");
-*/
 
 const app = express();
 
@@ -49,16 +45,11 @@ app.use(express.json());
 
 // Root endpoint
 app.get("/", (req, res) => {
-  res.send("Backend ReUseMarket running");
+  res.send("Backend GreenMarket running");
 });
 
 // API routes
-// DIUBAH: Mendukung prefix '/api/auth' dan '/' sekaligus agar frontend tidak 404 apapun format panggilannya
-app.use("/api/auth", authRoutes);
 app.use("/", authRoutes);
-
-//Jalur endpoint dinonaktifkan sampai berkas controllernya tersedia dulu
-/*
 app.use("/api/users", userRoutes);
 app.use("/api/alamat", addressRoutes);
 app.use("/admin", adminRoutes);
@@ -68,7 +59,6 @@ app.use("/api/keranjang", keranjangRoutes);
 app.use("/api/jasa-kirim", jasaKirimRoutes);
 app.use("/api/metode-pembayaran", metodePembayaranRoutes);
 app.use("/api/transaksi", transaksiRoutes);
-*/
 
 // Listener untuk local / Render
 const PORT = process.env.PORT || 5050;
