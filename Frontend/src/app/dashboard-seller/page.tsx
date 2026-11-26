@@ -1,527 +1,859 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Footer from "@/components/Footer";
+import Link from "next/link";
+import { useEffect, useState, useMemo } from "react";
+import { useToast } from "@/hooks/useToast";
 import Nav from "@/components/navbar";
 
-// Animation styles for smooth entrance effects
-const animationStyles = `
-  @keyframes fadeInUp {
-    from { opacity: 0; transform: translateY(40px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-  @keyframes slideInLeft {
-    from { opacity: 0; transform: translateX(-40px); }
-    to { opacity: 1; transform: translateX(0); }
-  }
-  @keyframes scaleIn {
-    from { opacity: 0; transform: scale(0.92); }
-    to { opacity: 1; transform: scale(1); }
-  }
-  .animate-fade-in-up {
-    opacity: 0;
-    animation: fadeInUp 1s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-  }
-  .animate-fade-in {
-    opacity: 0;
-    animation: fadeIn 0.8s ease-out forwards;
-  }
-  .animate-slide-in-left {
-    opacity: 0;
-    animation: slideInLeft 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-  }
-  .animate-scale-in {
-    opacity: 0;
-    animation: scaleIn 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-  }
-  .delay-100 { animation-delay: 100ms; }
-  .delay-200 { animation-delay: 200ms; }
-  .delay-300 { animation-delay: 300ms; }
-  .delay-400 { animation-delay: 400ms; }
-  .delay-500 { animation-delay: 500ms; }
-`;
+// ── IMPORT IKON LUCIDE (ZERO EMOJI) ──
+import {
+  Leaf,
+  Users,
+  Package,
+  ShoppingBag,
+  BarChart3,
+  TrendingUp,
+  Wallet,
+  Activity,
+  Bell,
+  Search,
+  LayoutDashboard,
+  Store,
+  Calendar,
+  Settings,
+  ShieldCheck,
+  ChevronRight,
+  LogOut
+} from "lucide-react";
 
-interface Produk {
-  id_produk: string;
-  id_user_seller: number;
-  nama_produk: string;
-  harga: number;
-  stok: number;
-  status_produk?: string;
-  deskripsi: string;
+// ── IMPORT RECHARTS UNTUK SPARKLINE RIIL ──
+import { ResponsiveContainer, AreaChart, Area } from "recharts";
 
-  foto_produk?: string;
-  foto_produk_list?: string[];
-
-  konten_deskripsi?: string;
-  catatan_penjual?: string;
-
-  kategori?: { nama_kategori: string };
-  seller?: { username: string; email: string };
+interface AdminUser {
+  id: number | string;
+  username?: string;
+  name?: string;
+  email?: string;
+  role?: string;
+  createdAt?: string;
 }
 
-export default function DashboardSeller() {
-  const [isPageLoading, setIsPageLoading] = useState(true);
-  const [shouldAnimate, setShouldAnimate] = useState(false);
-  const [dbProducts, setDbProducts] = useState<Produk[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [userName, setUserName] = useState<string>("User");
-  const [sellerId, setSellerId] = useState<number | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [currentSlide, setCurrentSlide] = useState(0);
-
-  const carouselSlides = [
-    {
-      image:
-        "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?q=80&w=1000&auto=format&fit=crop",
-      title: "Pusat Kendali Bisnis Hijau Anda.",
-      subtitle:
-        "Pantau inventaris, tingkatkan penjualan, dan jadilah agen perubahan untuk lingkungan bersama ribuan penjual lainnya.",
-      badge: "Seller Dashboard",
-    },
-    {
-      image:
-        "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?q=80&w=1000&auto=format&fit=crop",
-      title: "Kelola Produk Daur Ulang.",
-      subtitle:
-        "Tampilkan produk daur ulang Anda ke pasar yang peduli lingkungan dan bangun bisnis berkelanjutan yang sukses.",
-      badge: "Recycling Business",
-    },
-    {
-      image:
-        "https://images.unsplash.com/photo-1497436072909-60f360e1d4b1?q=80&w=1000&auto=format&fit=crop",
-      title: "Jangkau Lebih Banyak Pelanggan.",
-      subtitle:
-        "Hubungkan produk Anda dengan komunitas pembeli yang aktif mencari solusi ramah lingkungan.",
-      badge: "Grow Your Impact",
-    },
-  ];
-
+export default function AdminPanel() {
+  const { showToast } = useToast();
   const router = useRouter();
-  const userRole = "SELLER";
+
+  const [isPageLoading, setIsPageLoading] = useState(true);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [adminName, setAdminName] = useState("Admin");
+  const [stats, setStats] = useState<{
+    totalUsers: number;
+    activeProducts: number;
+    pendingProducts: number;
+    totalTransactions: number;
+  } | null>(null);
+
+  const [latestProducts, setLatestProducts] = useState<any[]>([]);
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [userSearchTerm, setUserSearchTerm] = useState("");
+  const [userRoleFilter, setUserRoleFilter] = useState("ALL");
+  const [timeFilter, setTimeFilter] = useState("7 hari terakhir");
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % carouselSlides.length);
-    }, 3500);
-    return () => clearInterval(interval);
-  }, []);
+    // Efek loading saat memuat halaman (800ms)
+    const timer = setTimeout(() => {
+      setIsPageLoading(false);
+    }, 800);
 
-  const myProducts = sellerId
-    ? dbProducts.filter((p) => p.id_user_seller === sellerId)
-    : [];
+    const role = localStorage.getItem("userRole");
+    const savedUser = localStorage.getItem("user");
 
-  const totalProduk = myProducts.length;
-  const totalStok = myProducts.reduce((acc, curr) => acc + curr.stok, 0);
-  const produkMenipis = myProducts.filter((p) => p.stok < 5).length;
+    if (savedUser) {
+      const userData = JSON.parse(savedUser) as AdminUser;
+      queueMicrotask(() => {
+        setAdminName(userData.username || userData.name || "Admin");
+      });
+    }
 
-  useEffect(() => {
-    const loadDashboard = async () => {
-      const storedUserId = localStorage.getItem("userId");
-      const storedRole = localStorage.getItem("userRole");
-      const storedUser = localStorage.getItem("user");
-      setSellerId(Number(storedUserId));
-
-      if (!storedUserId) {
+    // Pengecekan Keamanan Role Admin
+    if (role !== "ADMIN") {
+      showToast("Akses ditolak! Halaman ini khusus Administrator.", "error");
+      if (role === "SELLER" || role === "BUYER") {
+        router.push("/beranda-dashboard");
+      } else {
         router.push("/login");
-        return;
       }
+      return;
+    }
 
-      if (storedRole !== "SELLER") {
-        router.push("/dashboard-buyer");
-        return;
-      }
-
-      if (storedUser) {
-        try {
-          const parsed = JSON.parse(storedUser);
-          if (parsed.username) setUserName(parsed.username);
-        } catch (e) {
-          console.error("Gagal membaca user dari localStorage:", e);
-        }
-      }
-
+    const fetchUsers = async () => {
       try {
-        setLoading(true);
-
-        const response = await fetch("https://greenmarket-backend-7o2xj2169.vercel.app/api/products");
-
-        if (!response.ok) {
-          throw new Error("Gagal mengambil data produk seller");
-        }
-
+        const response = await fetch(
+          `https://greenmarket-backend-7o2xj2169.vercel.app/admin/users?role=${role}`,
+        );
         const data = await response.json();
-        setDbProducts(Array.isArray(data) ? data : []);
+        if (response.ok) setUsers(data);
       } catch (error) {
-        console.error("Error Fetching:", error);
-        setDbProducts([]);
+        console.error("Gagal koneksi ke API", error);
       } finally {
         setLoading(false);
-
-        setTimeout(() => {
-          setIsPageLoading(false);
-          setShouldAnimate(true);
-        }, 500);
       }
     };
 
-    loadDashboard();
+    const fetchStats = async () => {
+      try {
+        const response = await fetch(
+          `https://greenmarket-backend-7o2xj2169.vercel.app/admin/stats?role=${role}`,
+        );
+        const data = await response.json();
+        if (response.ok) setStats(data);
+      } catch (error) {
+        console.error("Gagal koneksi ke API Stats", error);
+      }
+    };
+
+    const fetchLatestProducts = async () => {
+      try {
+        const response = await fetch("https://greenmarket-backend-7o2xj2169.vercel.app/api/products");
+        const data = await response.json();
+        if (response.ok) {
+          setLatestProducts(Array.isArray(data) ? data.slice(0, 5) : []);
+        }
+      } catch (error) {
+        console.error("Gagal koneksi ke API Products", error);
+      } finally {
+        setProductsLoading(false);
+      }
+    };
+
+    fetchUsers();
+    fetchStats();
+    fetchLatestProducts();
+
+    return () => clearTimeout(timer);
   }, [router]);
-
-  const resetFilters = () => {
-    const inputs = document.querySelectorAll(
-      ".filter-check input",
-    ) as NodeListOf<HTMLInputElement>;
-
-    inputs.forEach((input) => {
-      input.checked = false;
-    });
-  };
 
   const handleLogout = () => {
     localStorage.clear();
     router.push("/login");
   };
 
-  const getProductImage = (product: Produk) => {
-    return (
-      product.foto_produk ||
-      product.foto_produk_list?.[0] ||
-      "https://placehold.co/500x500/1a1f1b/2fa84f?text=No+Image"
-    );
-  };
+  const filteredUsers = users.filter((u) => {
+    const searchTerm = (userSearchTerm || "").toLowerCase();
+    const matchesSearch =
+      (u.username || "").toLowerCase().includes(searchTerm) ||
+      (u.email || "").toLowerCase().includes(searchTerm);
+    const matchesRole = userRoleFilter === "ALL" || u.role === userRoleFilter;
+    return matchesSearch && matchesRole;
+  });
+
+  // ── MEMOIZED TRENDS CALCULATIONS (LIGHTWEIGHT, SINGLE PASS) ──
+  const trendStats = useMemo(() => {
+    const now = Date.now();
+    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+    const fourteenDaysAgo = now - 14 * 24 * 60 * 60 * 1000;
+
+    const computeTrend = (list: any[], dateField: string) => {
+      let recent = 0;
+      let previous = 0;
+
+      for (let i = 0; i < list.length; i++) {
+        const item = list[i];
+        const rawDate = item[dateField];
+        if (!rawDate) continue;
+        const time = new Date(rawDate).getTime();
+        if (time >= sevenDaysAgo && time <= now) {
+          recent++;
+        } else if (time >= fourteenDaysAgo && time < sevenDaysAgo) {
+          previous++;
+        }
+      }
+
+      if (previous > 0) {
+        const pct = Math.round(((recent - previous) / previous) * 100);
+        return { label: `↑ ${pct}%`, sub: "vs 7 hari lalu", hasData: true };
+      }
+      return { label: "", sub: "", hasData: false };
+    };
+
+    const buyers = users.filter((u) => u.role === "BUYER");
+    const sellers = users.filter((u) => u.role === "SELLER");
+
+    return {
+      buyer: computeTrend(buyers, "createdAt"),
+      seller: computeTrend(sellers, "createdAt"),
+      produk: computeTrend(latestProducts, "created_at"),
+    };
+  }, [users, latestProducts]);
+
+  // ── MEMOIZED DATA SPARKLINE RECHARTS (OPTIMIZED SINGLE LOOP) ──
+  const sparklineData = useMemo(() => {
+    const days = Array.from({ length: 7 }).map((_, idx) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - idx));
+      const dayStr = d.toLocaleDateString("id-ID", { weekday: "short" });
+      const dayStart = new Date(d.setHours(0, 0, 0, 0)).getTime();
+      const dayEnd = new Date(d.setHours(23, 59, 59, 999)).getTime();
+      return { dayStr, dayStart, dayEnd, buyer: 0, seller: 0, produk: 0 };
+    });
+
+    for (let i = 0; i < users.length; i++) {
+      const u = users[i];
+      if (!u.createdAt) continue;
+      const t = new Date(u.createdAt).getTime();
+      for (let j = 0; j < 7; j++) {
+        if (t >= days[j].dayStart && t <= days[j].dayEnd) {
+          if (u.role === "BUYER") days[j].buyer++;
+          if (u.role === "SELLER") days[j].seller++;
+          break;
+        }
+      }
+    }
+
+    for (let i = 0; i < latestProducts.length; i++) {
+      const p = latestProducts[i];
+      const rawDate = p.created_at || p.createdAt;
+      if (!rawDate) continue;
+      const t = new Date(rawDate).getTime();
+      for (let j = 0; j < 7; j++) {
+        if (t >= days[j].dayStart && t <= days[j].dayEnd) {
+          days[j].produk++;
+          break;
+        }
+      }
+    }
+
+    return days.map((day) => ({
+      day: day.dayStr,
+      buyer: day.buyer,
+      seller: day.seller,
+      produk: day.produk,
+    }));
+  }, [users, latestProducts]);
 
   if (isPageLoading) {
     return (
-      <div className="min-h-screen bg-[#0a110b] flex flex-col items-center justify-center font-sans">
-        <div className="w-12 h-12 border-4 border-[#2fa84f]/20 border-t-[#2fa84f] rounded-full animate-spin mb-4"></div>
-        <p className="text-[#2fa84f] font-bold text-[11px] tracking-[3px] uppercase animate-pulse">
-          Menyiapkan Ekosistem...
+      <div className="min-h-screen bg-[#07110A] flex flex-col items-center justify-center font-sans">
+        <div className="w-10 h-10 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
+        <p className="text-emerald-500 font-bold text-[10px] tracking-[4px] uppercase animate-pulse">
+          Otentikasi Sistem...
         </p>
       </div>
     );
   }
 
-  const filteredProducts = dbProducts.filter(
-    (p) =>
-      p.nama_produk?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.kategori?.nama_kategori
-        ?.toLowerCase()
-        .includes(searchTerm.toLowerCase()),
-  );
-
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-[#f1f8e9] via-[#2fa84f]/15 to-[#0a110b] font-sans text-[#1a2e1f] relative overflow-hidden">
-      <style>{animationStyles}</style>
-      <div className="absolute top-[-10%] right-[-5%] w-[600px] h-[600px] bg-[#2fa84f] opacity-20 blur-[150px] rounded-full pointer-events-none"></div>
+    <div className="min-h-screen flex flex-col bg-[#07110A] font-sans text-gray-200 relative overflow-hidden">
+      {/* ── SOFT PREMIUM ECO-BACKGROUND BLUR ── */}
+      <div className="absolute top-[-30%] right-[-10%] w-[800px] h-[800px] bg-[#2fa84f] opacity-[0.08] blur-[180px] rounded-full pointer-events-none z-0"></div>
+      <div className="absolute bottom-[-35%] left-[-15%] w-[700px] h-[700px] bg-[#2fa84f] opacity-[0.05] blur-[150px] rounded-full pointer-events-none z-0"></div>
 
-      <Nav
-        variant="dashboardSeller"
-        shouldAnimate={shouldAnimate}
-        userName={userName}
-        userRole={userRole}
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        handleLogout={handleLogout}
-      />
+      {/* ── NAVBAR ── */}
+      <Nav variant="admin" adminName={adminName} />
 
-      <main className="flex-grow container max-w-[1600px] mx-auto pt-24 px-6 pb-20 relative z-10 w-full">
-        <div
-          className={`w-full h-[240px] md:h-[280px] rounded-[32px] overflow-hidden relative mb-8 shadow-2xl border border-white/10 ${shouldAnimate ? "animate-scale-in delay-100" : "opacity-0"}`}
-        >
-          {carouselSlides.map((slide, index) => (
-            <div
-              key={index}
-              className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
-                index === currentSlide ? "opacity-100" : "opacity-0"
-              }`}
-            >
-              <img
-                src={slide.image}
-                alt={slide.title}
-                className="w-full h-full object-cover opacity-90"
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#1a2e1f]/95 via-[#1a2e1f]/60 to-transparent"></div>
+      <div className="max-w-[1680px] mx-auto pt-24 pb-20 px-8 flex flex-col lg:flex-row gap-8 relative z-10 w-full flex-grow">
+        {/* ── PREMIUM STICKY SIDEBAR (Mockup Style) ── */}
+        <aside className="w-full lg:w-[280px] shrink-0">
+          <div className="sticky top-24 bg-[#0d1510]/80 backdrop-blur-2xl rounded-[28px] p-6 border border-white/5 shadow-[0_20px_40px_rgba(0,0,0,0.6)] flex flex-col justify-between h-[calc(100vh-140px)]">
+            <div>
+              {/* Logo Area */}
+              <div className="flex items-center gap-3 mb-8 px-2">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#2fa84f] to-[#4ade80] flex items-center justify-center shadow-[0_0_12px_rgba(47,168,79,0.3)]">
+                  <Leaf className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <span className="text-xs font-black text-white tracking-wider block">GREENMARKET</span>
+                  <span className="text-[9px] font-semibold text-[#2fa84f] tracking-[1.5px] uppercase">ADMIN CONSOLE</span>
+                </div>
+              </div>
 
-              <div className="absolute inset-0 flex flex-col justify-center px-8 md:px-14">
-                <span className="text-[#2fa84f] font-black tracking-widest text-[10px] md:text-xs uppercase mb-2 drop-shadow-md">
-                  {slide.badge}
-                </span>
-                <h1 className="text-3xl md:text-5xl font-black text-white mb-3 tracking-tight drop-shadow-xl max-w-2xl leading-tight">
-                  {slide.title}
-                </h1>
-                <p className="text-white/80 font-medium max-w-lg text-xs md:text-sm leading-relaxed drop-shadow-md">
-                  {slide.subtitle}
-                </p>
+              {/* Navigation Links */}
+              <nav className="flex flex-col gap-1.5">
+                <Link
+                  href="#dashboard"
+                  className="flex items-center justify-between px-4 py-3 rounded-2xl bg-[#2fa84f]/10 text-[#4ade80] border border-[#2fa84f]/25 font-bold transition-all duration-300 no-underline group shadow-[0_0_15px_rgba(47,168,79,0.05)]"
+                >
+                  <div className="flex items-center gap-3">
+                    <LayoutDashboard className="w-4 h-4 text-[#4ade80]" />
+                    <span className="text-xs tracking-wide">Dashboard</span>
+                  </div>
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#2fa84f] shadow-[0_0_8px_#2fa84f]"></div>
+                </Link>
+                <Link
+                  href="#users"
+                  className="flex items-center gap-3 px-4 py-3 rounded-2xl text-gray-400 hover:bg-white/5 hover:text-white transition-all duration-300 no-underline font-semibold border border-transparent"
+                >
+                  <Users className="w-4 h-4" />
+                  <span className="text-xs tracking-wide">Pengguna</span>
+                </Link>
+                <Link
+                  href="#products"
+                  className="flex items-center gap-3 px-4 py-3 rounded-2xl text-gray-400 hover:bg-white/5 hover:text-white transition-all duration-300 no-underline font-semibold border border-transparent"
+                >
+                  <Package className="w-4 h-4" />
+                  <span className="text-xs tracking-wide">Produk</span>
+                </Link>
+                <Link
+                  href="#transactions"
+                  className="flex items-center gap-3 px-4 py-3 rounded-2xl text-gray-400 hover:bg-white/5 hover:text-white transition-all duration-300 no-underline font-semibold border border-transparent"
+                >
+                  <Wallet className="w-4 h-4" />
+                  <span className="text-xs tracking-wide">Transaksi</span>
+                </Link>
+                <Link
+                  href="#transactions"
+                  className="flex items-center gap-3 px-4 py-3 rounded-2xl text-gray-400 hover:bg-white/5 hover:text-white transition-all duration-300 no-underline font-semibold border border-transparent"
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  <span className="text-xs tracking-wide">Laporan</span>
+                </Link>
+                <div className="flex items-center justify-between px-4 py-3 rounded-2xl text-gray-400 hover:bg-white/5 hover:text-white transition-all duration-300 font-semibold border border-transparent relative group">
+                  <div className="flex items-center gap-3">
+                    <Settings className="w-4 h-4" />
+                    <span className="text-xs tracking-wide">Filter Data</span>
+                  </div>
+                  <select
+                    value={timeFilter}
+                    onChange={(e) => setTimeFilter(e.target.value)}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  >
+                    <option value="7 hari terakhir">7 hari terakhir</option>
+                    <option value="14 hari terakhir">14 hari terakhir</option>
+                    <option value="30 hari terakhir">30 hari terakhir</option>
+                  </select>
+                  <span className="text-[9px] bg-[#2fa84f]/10 text-[#4ade80] px-2 py-0.5 rounded-full font-bold group-hover:bg-[#2fa84f]/20 transition-colors">
+                    {timeFilter}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex items-center gap-3 px-4 py-3 rounded-2xl text-gray-400 hover:bg-red-500/10 hover:text-red-400 transition-all duration-300 font-semibold border border-transparent bg-transparent cursor-pointer text-left w-full group"
+                >
+                  <LogOut className="w-4 h-4 text-gray-400 group-hover:text-red-400 transition-colors" />
+                  <span className="text-xs tracking-wide">Keluar Sistem</span>
+                </button>
+              </nav>
+            </div>
+
+            {/* Bottom Card Leaf Illustration & Admin Badge */}
+            <div className="flex flex-col gap-4 border-t border-white/5 pt-5">
+              <button
+                type="button"
+                onClick={() => router.push("/profile")}
+                className="flex w-full items-center gap-3 bg-[#07110a]/80 p-3 rounded-2xl border border-white/5 text-left hover:border-[#2fa84f]/40 hover:bg-[#0d1510] transition-all cursor-pointer group"
+              >
+                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-[#2fa84f]/20 to-transparent flex items-center justify-center border border-[#2fa84f]/20 text-[#4ade80] font-black text-xs shrink-0 group-hover:scale-105 transition-transform">
+                  {adminName.charAt(0)}
+                </div>
+                <div className="min-w-0 flex-grow">
+                  <p className="text-xs font-black text-white truncate leading-none mb-1 group-hover:text-[#4ade80] transition-colors">{adminName}</p>
+                  <span className="text-[8px] font-black text-[#2fa84f] tracking-wider uppercase">SUPERADMIN</span>
+                </div>
+              </button>
+
+              {/* Ecosystem Block */}
+              <div className="bg-[#07110a]/50 p-4 rounded-[20px] border border-white/5 text-center">
+                <Leaf className="w-5 h-5 text-[#2fa84f] mx-auto mb-2 animate-pulse" />
+                <p className="text-[9px] font-bold text-white tracking-wide leading-tight mb-1">GreenMarket</p>
+                <p className="text-[8px] text-gray-500 leading-relaxed mb-0">Ekosistem hijau untuk masa depan.</p>
+              </div>
+
+              <p className="text-[8px] text-gray-600 text-center tracking-wider uppercase mb-0">
+                © 2026 GreenMarket Inc. All rights reserved.
+              </p>
+            </div>
+          </div>
+        </aside>
+
+        {/* ── MAIN EXECUTIVES DASHBOARD ── */}
+        <main id="dashboard" className="flex-grow scroll-mt-24 min-w-0">
+          {/* ── PREMIUM HEADER CONTROL BAR ── */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 bg-[#0d1510]/30 backdrop-blur-md p-4 rounded-2xl border border-white/5">
+            <span className="text-[10px] font-black text-[#2fa84f] uppercase tracking-[3px]">
+              DASHBOARD PUSAT DATA
+            </span>
+            
+            <div className="flex items-center gap-4 self-end md:self-auto">
+              {/* Premium Glass Search Bar */}
+              <div className="relative shrink-0 w-44 md:w-56">
+                <input
+                  type="text"
+                  placeholder="Cari apa saja..."
+                  className="w-full bg-[#07110a]/70 border border-white/5 rounded-xl py-2 pl-9 pr-4 text-[10px] text-white focus:outline-none focus:border-[#2fa84f]/60 transition-all placeholder-gray-500"
+                />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+              </div>
+
+              {/* Notification Bell */}
+              <button className="relative p-2 rounded-xl bg-white/5 border border-white/5 text-gray-400 hover:text-white transition-all shrink-0">
+                <Bell className="w-3.5 h-3.5" />
+                <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-[#2fa84f] rounded-full"></span>
+              </button>
+
+              {/* Admin Avatar Circle */}
+              <button
+                type="button"
+                onClick={() => router.push("/profile")}
+                className="w-8 h-8 rounded-full bg-[#2fa84f] border border-white/10 flex items-center justify-center text-white text-[10px] font-black shrink-0 hover:scale-105 hover:opacity-80 transition-all cursor-pointer"
+                title="Lihat Profil"
+              >
+                {adminName.substring(0, 1).toUpperCase()}
+              </button>
+
+              {/* Date Filter Dropdown */}
+              <div className="relative shrink-0">
+                <select
+                  value={timeFilter}
+                  onChange={(e) => setTimeFilter(e.target.value)}
+                  className="bg-white/5 border border-white/5 text-gray-400 text-[10px] rounded-xl px-3 py-2 focus:outline-none focus:border-[#2fa84f]/60 transition-all font-semibold cursor-pointer"
+                >
+                  <option value="7 hari terakhir">7 hari terakhir</option>
+                  <option value="14 hari terakhir">14 hari terakhir</option>
+                  <option value="30 hari terakhir">30 hari terakhir</option>
+                </select>
               </div>
             </div>
-          ))}
+          </div>
 
-          <button
-            onClick={() =>
-              setCurrentSlide(
-                (prev) =>
-                  (prev - 1 + carouselSlides.length) % carouselSlides.length,
-              )
-            }
-            className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-all border border-white/20 z-20"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-            >
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </button>
+          {/* ── HERO HEADER GREETINGS ── */}
+          <div className="mb-8">
+            <h1 className="text-3xl md:text-4xl font-[900] text-white tracking-tight leading-tight mb-2">
+              Selamat datang kembali, <span className="text-transparent bg-gradient-to-r from-[#2fa84f] to-[#4ade80] bg-clip-text font-black">{adminName}</span>
+            </h1>
+            <p className="text-gray-400 text-xs font-semibold leading-relaxed mb-6">
+              Pantau dan kelola seluruh ekosistem GreenMarket secara real-time.
+            </p>
 
-          <button
-            onClick={() =>
-              setCurrentSlide((prev) => (prev + 1) % carouselSlides.length)
-            }
-            className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white/20 transition-all border border-white/20 z-20"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-            >
-              <path d="M9 18l6-6-6-6" />
-            </svg>
-          </button>
+            {/* Horizontal Mini Glass Pills */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 bg-[#0d1510]/80 border border-white/5 rounded-full px-3.5 py-1.5 text-[9px] font-bold text-gray-300 shadow-[0_0_12px_rgba(0,0,0,0.4)]">
+                <Users className="w-3.5 h-3.5 text-[#3b82f6]" />
+                <span>{stats?.totalUsers ?? users.length ?? 0} Pengguna</span>
+              </div>
+              <div className="flex items-center gap-2 bg-[#0d1510]/80 border border-white/5 rounded-full px-3.5 py-1.5 text-[9px] font-bold text-gray-300 shadow-[0_0_12px_rgba(0,0,0,0.4)]">
+                <Store className="w-3.5 h-3.5 text-[#a855f7]" />
+                <span>{users.filter((u) => u.role === "SELLER").length} Seller</span>
+              </div>
+              <div className="flex items-center gap-2 bg-[#0d1510]/80 border border-white/5 rounded-full px-3.5 py-1.5 text-[9px] font-bold text-gray-300 shadow-[0_0_12px_rgba(0,0,0,0.4)]">
+                <Package className="w-3.5 h-3.5 text-[#2fa84f]" />
+                <span>{stats?.activeProducts ?? latestProducts.length ?? 0} Produk</span>
+              </div>
+              <div className="flex items-center gap-2 bg-[#0d1510]/80 border border-white/5 rounded-full px-3.5 py-1.5 text-[9px] font-bold text-gray-300 shadow-[0_0_12px_rgba(0,0,0,0.4)]">
+                <Wallet className="w-3.5 h-3.5 text-amber-500" />
+                <span>{stats?.totalTransactions ?? 0} Transaksi</span>
+              </div>
+            </div>
+          </div>
 
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
-            {carouselSlides.map((_, index) => (
-              <button
-                key={index}
-                onClick={() => setCurrentSlide(index)}
-                className={`w-2 h-2 rounded-full transition-all ${
-                  index === currentSlide
-                    ? "bg-[#2fa84f] w-6"
-                    : "bg-white/40 hover:bg-white/60"
-                }`}
-              />
+          {/* ── KPI CARDS WITH REAL SPARKLINE CHARTS ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {[
+              {
+                label: "BUYER",
+                value: users.filter((u) => u.role === "BUYER").length,
+                icon: <Users className="w-4 h-4 text-emerald-400" />,
+                trend: trendStats.buyer,
+                color: "#10b981",
+                dataKey: "buyer",
+                glow: "rgba(16,185,129,0.12)"
+              },
+              {
+                label: "SELLER",
+                value: users.filter((u) => u.role === "SELLER").length,
+                icon: <Store className="w-4 h-4 text-purple-400" />,
+                trend: trendStats.seller,
+                color: "#a855f7",
+                dataKey: "seller",
+                glow: "rgba(168,85,247,0.12)"
+              },
+              {
+                label: "PRODUK",
+                value: stats?.activeProducts ?? latestProducts.length ?? 0,
+                icon: <Package className="w-4 h-4 text-blue-400" />,
+                trend: trendStats.produk,
+                color: "#3b82f6",
+                dataKey: "produk",
+                glow: "rgba(59,130,246,0.12)"
+              },
+              {
+                label: "TRANSAKSI",
+                value: stats?.totalTransactions ?? 0,
+                icon: <Wallet className="w-4 h-4 text-amber-400" />,
+                trend: { label: "", hasData: false, sub: "" },
+                color: "#f59e0b",
+                dataKey: "buyer",
+                glow: "rgba(245,158,11,0.12)"
+              }
+            ].map((card, idx) => (
+              <div
+                key={idx}
+                className="bg-[#0d1510]/80 backdrop-blur-xl p-6 rounded-[28px] border border-white/5 shadow-2xl relative overflow-hidden transition-all duration-300 hover:border-[#2fa84f]/25 hover:scale-[1.01] group"
+                style={{ boxShadow: `0 10px 30px -15px ${card.glow}` }}
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <h3 className="text-gray-400 font-bold text-[9px] uppercase tracking-[1.5px]">
+                    {card.label}
+                  </h3>
+                  <div className="p-1.5 rounded-xl bg-white/5 border border-white/5 group-hover:scale-105 transition-transform">
+                    {card.icon}
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <p className="text-[34px] font-[900] text-white tracking-tighter leading-none mb-1.5">
+                    {card.value}
+                  </p>
+                  
+                  {/* Dynamic Trend Badge (Real Data Only) */}
+                  {card.trend.hasData ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/15">
+                        {card.trend.label}
+                      </span>
+                      <span className="text-[8px] text-gray-500">{card.trend.sub}</span>
+                    </div>
+                  ) : (
+                    <span className="text-[8px] font-semibold text-gray-500 block">
+                      No comparison data
+                    </span>
+                  )}
+                </div>
+
+                {/* Recharts Premium Sparkline (AreaChart) */}
+                {card.label === "TRANSAKSI" ? (
+                  <div className="w-full h-12 mt-3 -mx-6 -mb-6 flex items-center justify-center bg-black/15 border-t border-white/5">
+                    <span className="text-[8px] font-black text-gray-500 tracking-wider uppercase">
+                      No activity data
+                    </span>
+                  </div>
+                ) : (
+                  <div className="w-full h-12 mt-3 -mx-6 -mb-6 opacity-30 group-hover:opacity-70 transition-opacity duration-300">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={sparklineData}>
+                        <defs>
+                          <linearGradient id={`colorGrad-${idx}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor={card.color} stopOpacity={0.4} />
+                            <stop offset="95%" stopColor={card.color} stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <Area
+                          type="monotone"
+                          dataKey={card.dataKey}
+                          stroke={card.color}
+                          strokeWidth={1.5}
+                          fillOpacity={1}
+                          fill={`url(#colorGrad-${idx})`}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
-        </div>
 
-        <div
-          className={`grid grid-cols-1 md:grid-cols-4 gap-4 mb-10 ${shouldAnimate ? "animate-fade-in-up delay-200" : "opacity-0"}`}
-        >
-          <div className="bg-[#1a1f1b]/80 backdrop-blur-md p-5 rounded-[24px] border border-white/5 shadow-xl hover:-translate-y-2 hover:border-[#2fa84f]/40 hover:shadow-[0_15px_30px_rgba(47,168,79,0.15)] transition-all duration-300 group cursor-pointer">
-            <p className="text-gray-400 text-[10px] uppercase font-black tracking-widest mb-1 group-hover:text-white/70 transition-colors">
-              Produk Saya
-            </p>
-            <h4 className="text-2xl font-black text-white group-hover:text-[#2fa84f] transition-colors">
-              {totalProduk}{" "}
-              <span className="text-[12px] text-gray-500 font-medium group-hover:text-white/50 transition-colors">
-                Item
-              </span>
-            </h4>
-          </div>
-
-          <div className="bg-[#1a1f1b]/80 backdrop-blur-md p-5 rounded-[24px] border border-white/5 shadow-xl hover:-translate-y-2 hover:border-[#2fa84f]/40 hover:shadow-[0_15px_30px_rgba(47,168,79,0.15)] transition-all duration-300 group cursor-pointer">
-            <p className="text-gray-400 text-[10px] uppercase font-black tracking-widest mb-1 group-hover:text-white/70 transition-colors">
-              Total Stok Saya
-            </p>
-            <h4 className="text-2xl font-black text-[#2fa84f] group-hover:scale-105 transform origin-left transition-transform">
-              {totalStok}{" "}
-              <span className="text-[12px] text-gray-500 font-medium">
-                Unit
-              </span>
-            </h4>
-          </div>
-
-          <div className="bg-[#1a1f1b]/80 backdrop-blur-md p-5 rounded-[24px] border border-white/5 shadow-xl hover:-translate-y-2 hover:border-red-500/40 hover:shadow-[0_15px_30px_rgba(239,68,68,0.15)] transition-all duration-300 group cursor-pointer">
-            <p className="text-gray-400 text-[10px] uppercase font-black tracking-widest mb-1 group-hover:text-white/70 transition-colors">
-              Stok Menipis
-            </p>
-            <h4 className="text-2xl font-black text-red-500 group-hover:scale-105 transform origin-left transition-transform">
-              {produkMenipis}{" "}
-              <span className="text-[12px] text-gray-500 font-medium">
-                Item
-              </span>
-            </h4>
-          </div>
-
-          <div className="bg-[#1a1f1b]/80 backdrop-blur-md p-5 rounded-[24px] border border-[#2fa84f]/20 shadow-xl flex items-center justify-between hover:-translate-y-2 hover:border-[#2fa84f]/60 hover:shadow-[0_15px_30px_rgba(47,168,79,0.2)] transition-all duration-300 group cursor-pointer">
-            <div>
-              <p className="text-gray-400 text-[10px] uppercase font-black tracking-widest mb-1 group-hover:text-white/70 transition-colors">
-                Status Seller
-              </p>
-              <h4 className="text-lg font-black text-white uppercase tracking-tight group-hover:text-[#2fa84f] transition-colors">
-                Terverifikasi
-              </h4>
+          {/* ── AKTIVITAS SISTEM TERBARU (LIVE BADGE & MOCKUP ROWS) ── */}
+          <div id="transactions" className="bg-[#0d1510]/80 backdrop-blur-xl rounded-[28px] border border-white/5 shadow-2xl p-7 mb-8 scroll-mt-24">
+            <div className="flex justify-between items-center mb-6">
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-[800] text-white tracking-tight">
+                  Aktivitas Sistem Terbaru
+                </h3>
+                <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[7px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shrink-0 animate-pulse">
+                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span>
+                  LIVE
+                </span>
+              </div>
             </div>
-            <div className="w-3 h-3 bg-[#2fa84f] rounded-full animate-pulse shadow-[0_0_10px_#2fa84f] group-hover:shadow-[0_0_20px_#2fa84f] transition-shadow duration-300"></div>
-          </div>
-        </div>
-
-        <div
-          className={`flex flex-col lg:flex-row gap-8 ${shouldAnimate ? "animate-fade-in delay-200" : "opacity-0"}`}
-        >
-          <aside className="w-full lg:w-[280px] shrink-0">
-            <div
-              className={`bg-[#1a1f1b]/80 backdrop-blur-xl rounded-[32px] p-6 border border-white/5 shadow-2xl sticky top-28 ${shouldAnimate ? "animate-slide-in-left delay-300" : "opacity-0"}`}
-            >
-              <div className="flex items-center gap-3 mb-8">
-                <div className="w-1.5 h-6 bg-[#2fa84f] rounded-full shadow-[0_0_8px_#2fa84f]"></div>
-                <h2 className="text-lg font-[800] text-white m-0 tracking-tight">
-                  Filter Pasar
-                </h2>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Kolom 1: Pengguna Terbaru */}
+              <div className="bg-[#07110a]/50 p-5 rounded-2xl border border-white/5 flex flex-col h-[320px] hover:border-[#2fa84f]/25 transition-all duration-300">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                    PENGGUNA TERDAFTAR BARU
+                  </h4>
+                  <Link href="#users" className="text-[#2fa84f] text-[9px] font-bold hover:underline no-underline">
+                    Lihat Semua
+                  </Link>
+                </div>
+                <div className="space-y-3 overflow-y-auto no-scrollbar flex-grow">
+                  {users.slice(0, 4).map((u) => {
+                    const rawDate = u.createdAt;
+                    const formattedTime = rawDate 
+                      ? new Date(rawDate).toLocaleDateString("id-ID", { day: "numeric", month: "short" }) 
+                      : "Baru saja";
+                    return (
+                      <div key={u.id} className="flex items-center justify-between p-2 hover:bg-white/5 rounded-xl transition-all border border-transparent">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[10px] text-white font-bold uppercase shrink-0">
+                            {u.username ? u.username.charAt(0) : "?"}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <p className="text-[11px] font-bold text-white truncate leading-none">{u.username}</p>
+                              <span className={`text-[7px] font-black px-1.5 py-0.2 rounded uppercase ${
+                                u.role === "ADMIN" ? "bg-purple-500/10 text-purple-400" : u.role === "SELLER" ? "bg-blue-500/10 text-blue-400" : "bg-emerald-500/10 text-emerald-400"
+                              }`}>
+                                {u.role}
+                              </span>
+                            </div>
+                            <p className="text-[9px] text-gray-500 truncate leading-none">{u.email}</p>
+                          </div>
+                        </div>
+                        <span className="text-[8px] text-gray-600 font-medium shrink-0">{formattedTime}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div className="space-y-4 mb-8">
-                {[
-                  "Pakaian Organik",
-                  "Daur Ulang",
-                  "Ramah Lingkungan",
-                  "Terlaris",
-                ].map((item) => (
-                  <label
-                    key={item}
-                    className="filter-check flex items-center gap-3 cursor-pointer group"
-                  >
-                    <input
-                      type="checkbox"
-                      className="accent-[#2fa84f] w-4 h-4 cursor-pointer bg-white/5 border-white/10 rounded"
-                    />
-                    <span className="text-sm font-medium text-gray-400 group-hover:text-white transition-colors">
-                      {item}
-                    </span>
-                  </label>
-                ))}
+              {/* Kolom 2: Produk Baru Terdaftar */}
+              <div className="bg-[#07110a]/50 p-5 rounded-2xl border border-white/5 flex flex-col h-[320px] hover:border-[#2fa84f]/25 transition-all duration-300">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                    PRODUK BARU KATALOG
+                  </h4>
+                  <Link href="#products" className="text-[#2fa84f] text-[9px] font-bold hover:underline no-underline">
+                    Lihat Semua
+                  </Link>
+                </div>
+                <div className="space-y-3 overflow-y-auto no-scrollbar flex-grow">
+                  {productsLoading ? (
+                    <p className="text-[9px] text-gray-500 animate-pulse">Menghubungkan...</p>
+                  ) : latestProducts.slice(0, 4).map((prod) => {
+                    const rawDate = prod?.createdAt || prod?.created_at;
+                    const formattedTime = rawDate 
+                      ? new Date(rawDate).toLocaleDateString("id-ID", { day: "numeric", month: "short" }) 
+                      : "Baru saja";
+                    return (
+                      <div key={prod?.id_produk} className="flex items-center justify-between p-2 hover:bg-white/5 rounded-xl transition-all border border-transparent">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 overflow-hidden text-[10px] text-[#2fa84f] font-bold">
+                            {prod?.foto_produk || prod?.foto_produk_list?.[0] ? (
+                              <img src={prod?.foto_produk || prod?.foto_produk_list?.[0]} alt="p" className="w-full h-full object-cover" />
+                            ) : (
+                              prod?.nama_produk?.charAt(0) || "P"
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-bold text-white truncate leading-none mb-1">{prod?.nama_produk}</p>
+                            <p className="text-[9px] text-[#2fa84f] font-bold leading-none">Rp {(prod?.harga || 0).toLocaleString("id-ID")}</p>
+                          </div>
+                        </div>
+                        <span className="text-[8px] text-gray-600 font-medium shrink-0">{formattedTime}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
-              <button
-                onClick={resetFilters}
-                className="w-full py-3.5 bg-white/5 text-gray-400 border border-transparent hover:border-white/10 rounded-2xl font-bold text-xs hover:bg-[#2fa84f] hover:text-white transition-all uppercase tracking-widest"
-              >
-                Reset Filter
-              </button>
-            </div>
-          </aside>
-
-          <section className="flex-1">
-            <div
-              className={`flex justify-between items-end mb-8 ${shouldAnimate ? "animate-fade-in-up delay-300" : "opacity-0"}`}
-            >
-              <h3 className="text-2xl font-[800] text-[#1a2e1f] tracking-tight m-0">
-                Katalog Produk GreenMarket
-              </h3>
-            </div>
-
-            {loading ? (
-              <div className="flex flex-col items-center justify-center py-20 text-[#2fa84f]">
-                <div className="w-12 h-12 border-4 border-[#2fa84f]/20 border-t-[#2fa84f] rounded-full animate-spin mb-4"></div>
-                <p className="font-bold text-[11px] uppercase tracking-[3px] animate-pulse text-[#1a2e1f]">
-                  Memuat Katalog...
+              {/* Kolom 3: Status Transaksi */}
+              <div className="bg-[#07110a]/50 p-5 rounded-2xl border border-white/5 flex flex-col h-[320px] justify-center items-center text-center hover:border-white/10 transition-all duration-300">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-[#2fa84f]/20 flex items-center justify-center text-[#2fa84f] mb-4">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <h4 className="text-xs font-black text-white uppercase tracking-wider mb-2">
+                  Transaksi belum tersedia
+                </h4>
+                <p className="text-[9px] text-gray-500 max-w-[200px] leading-relaxed mb-0">
+                  Fitur monitoring transaksi sistem global akan aktif setelah endpoint dedicated <code className="text-[#2fa84f] bg-white/5 px-1 py-0.5 rounded">GET /admin/transactions</code> tersedia pada database backend.
                 </p>
               </div>
-            ) : filteredProducts.length === 0 ? (
-              <div className="text-center py-20 bg-white/50 backdrop-blur-md rounded-[40px] border border-dashed border-[#2fa84f]/30 text-[#1a2e1f] font-bold shadow-sm">
-                Belum ada produk yang sesuai dengan pencarian.
+            </div>
+          </div>
+
+          {/* ── SECTION 4: KATALOG PRODUK AKTIF (Mockup Cards Row) ── */}
+          <div id="products" className="bg-[#0d1510]/80 backdrop-blur-xl rounded-[28px] border border-white/5 shadow-2xl p-7 mb-8 scroll-mt-24">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-base font-[800] text-white tracking-tight">
+                Katalog Produk Terbaru
+              </h3>
+              <div className="flex items-center gap-4">
+                <Link
+                  href="/dashboard-buyer"
+                  className="text-[#2fa84f] text-[10px] font-bold hover:underline no-underline"
+                >
+                  Lihat Semua
+                </Link>
               </div>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5">
-                {filteredProducts.map((p, i) => {
-                  const isMyProduct =
-                    sellerId !== null && p.id_user_seller === sellerId;
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5">
+              {productsLoading ? (
+                <div className="col-span-4 flex flex-col items-center justify-center py-12">
+                  <div className="w-6 h-6 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mb-3"></div>
+                  <span className="text-[8px] text-emerald-500 font-bold uppercase tracking-widest animate-pulse">
+                    Sinkronisasi Database...
+                  </span>
+                </div>
+              ) : latestProducts.length === 0 ? (
+                <div className="col-span-4 text-center py-10 text-gray-500 font-bold text-[10px] border border-dashed border-white/10 rounded-2xl">
+                  Tidak ada data produk di database.
+                </div>
+              ) : (
+                latestProducts.slice(0, 4).map((prod) => {
+                  const sellerName = prod?.seller?.username || prod?.user?.username || "EcoStore";
+                  const rawDate = prod?.createdAt || prod?.created_at;
+                  const createdDate = rawDate
+                    ? new Date(rawDate).toLocaleDateString("id-ID", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })
+                    : null;
+
+                  const isRecent = rawDate
+                    ? (Date.now() - new Date(rawDate).getTime()) / (1000 * 60 * 60 * 24) < 3
+                    : false;
 
                   return (
                     <div
-                      key={p.id_produk}
-                      className={`relative group ${
-                        shouldAnimate ? "animate-fade-in-up" : "opacity-0"
-                      }`}
-                      style={
-                        shouldAnimate
-                          ? { animationDelay: `${400 + (i % 8) * 100}ms` }
-                          : {}
-                      }
+                      key={prod?.id_produk}
+                      className="bg-[#07110a]/50 rounded-[22px] border border-white/5 overflow-hidden hover:border-[#2fa84f]/30 transition-all duration-300 group hover:scale-[1.02]"
                     >
-                      <Link
-                        href={`/katalog-detail/${p.id_produk}`}
-                        className="no-underline block h-full"
-                      >
-                        <div className="bg-[#1a1f1b]/90 backdrop-blur-md border border-white/5 rounded-[28px] overflow-hidden hover:border-[#2fa84f]/50 transition-all duration-500 flex flex-col relative shadow-xl hover:-translate-y-1 h-full">
-                          <div className="relative aspect-square bg-[#0a110b] overflow-hidden">
-                            <img
-                              src={getProductImage(p)}
-                              alt={p.nama_produk}
-                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-90 group-hover:opacity-100"
-                            />
+                      {/* Product Image Area */}
+                      <div className="h-32 bg-white/5 relative flex items-center justify-center overflow-hidden border-b border-white/5">
+                        {prod?.foto_produk || prod?.foto_produk_list?.[0] ? (
+                          <img
+                            src={prod?.foto_produk || prod?.foto_produk_list?.[0]}
+                            alt={prod?.nama_produk || "Produk"}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          />
+                        ) : (
+                          <Package className="w-8 h-8 text-gray-600" />
+                        )}
+                        {isRecent && (
+                          <span className="absolute top-3 left-3 bg-[#2fa84f] text-white text-[7px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                            BARU
+                          </span>
+                        )}
+                      </div>
 
-                            <div className="absolute top-4 left-4 bg-[#2fa84f] text-white text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-wider shadow-lg">
-                              {p.kategori?.nama_kategori || "Eco Product"}
-                            </div>
-
-                            {isMyProduct && (
-                              <div className="absolute top-4 right-4 bg-yellow-400 text-[#1a1f1b] text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-wider shadow-lg">
-                                Produk Saya
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="p-5 flex flex-col flex-grow">
-                            <h4 className="font-bold text-[14px] text-white mb-1.5 line-clamp-1 leading-snug group-hover:text-[#2fa84f] transition-colors">
-                              {p.nama_produk}
-                            </h4>
-
-                            <p className="text-gray-400 text-[11px] mb-4 line-clamp-2 italic opacity-70 leading-relaxed">
-                              {p.deskripsi}
-                            </p>
-
-                            <div className="text-[#2fa84f] font-[900] text-lg mb-4 mt-auto tracking-tight">
-                              <span className="text-[11px] mr-0.5">Rp</span>
-                              {p.harga?.toLocaleString("id-ID")}
-                            </div>
-
-                            <div className="flex justify-between items-center pt-4 border-t border-white/5">
-                              <span className="text-[9px] text-gray-500 uppercase font-black truncate max-w-[100px] flex items-center gap-1.5">
-                                <svg
-                                  width="10"
-                                  height="10"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2.5"
-                                >
-                                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                                  <circle cx="12" cy="7" r="4" />
-                                </svg>
-                                {p.seller?.username || "Toko Saya"}
-                              </span>
-
-                              <span className="text-[9px] text-[#2fa84f] bg-[#2fa84f]/10 px-2 py-1 rounded font-black uppercase">
-                                {p.stok} Unit
-                              </span>
-                            </div>
-                          </div>
+                      {/* Product Info */}
+                      <div className="p-4">
+                        <p className="font-bold text-white text-xs truncate leading-tight mb-1">
+                          {prod?.nama_produk || "Produk Tanpa Nama"}
+                        </p>
+                        <p className="text-[#2fa84f] font-black text-xs mb-3">
+                          Rp {(prod?.harga || 0).toLocaleString("id-ID")}
+                        </p>
+                        
+                        <div className="border-t border-white/5 pt-2 flex flex-col gap-0.5 text-[9px] text-gray-500 font-medium">
+                          <p className="truncate m-0">Oleh: <span className="text-gray-300">{sellerName}</span></p>
+                          {createdDate && <p className="m-0">{createdDate}</p>}
                         </div>
-                      </Link>
+                      </div>
                     </div>
                   );
-                })}
-              </div>
-            )}
-          </section>
-        </div>
-      </main>
+                })
+              )}
+            </div>
+          </div>
 
-      <Footer />
+          {/* ── SECTION 5: MANAJEMEN PENGGUNA TERBARU ── */}
+          <div id="users" className="bg-[#0d1510]/80 backdrop-blur-xl rounded-[28px] border border-white/5 shadow-2xl p-7 scroll-mt-24">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-base font-[800] text-white tracking-tight">
+                Pengguna Terbaru
+              </h3>
+              <Link href="#users" className="text-[#2fa84f] text-[9px] font-bold hover:underline no-underline">
+                Lihat Semua
+              </Link>
+            </div>
+            
+            {/* Filter controls matching Mockup */}
+            <div className="flex flex-col sm:flex-row gap-3 mb-6">
+              <div className="flex-grow relative">
+                <input
+                  type="text"
+                  placeholder="Cari pengguna..."
+                  value={userSearchTerm}
+                  onChange={(e) => setUserSearchTerm(e.target.value)}
+                  className="w-full bg-[#07110a]/80 border border-white/5 rounded-xl px-4 py-2 pl-9 text-[10px] text-white focus:outline-none focus:border-[#2fa84f]/60 transition-all placeholder-gray-500"
+                />
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500" />
+              </div>
+              
+              <select
+                value={userRoleFilter}
+                onChange={(e) => setUserRoleFilter(e.target.value)}
+                className="bg-[#07110a]/80 border border-white/5 rounded-xl px-3 py-2 text-[10px] text-white focus:outline-none focus:border-[#2fa84f]/60 transition-all cursor-pointer font-semibold"
+              >
+                <option value="ALL">Semua Peran</option>
+                <option value="ADMIN">ADMIN</option>
+                <option value="SELLER">SELLER</option>
+                <option value="BUYER">BUYER</option>
+              </select>
+            </div>
+
+            {/* List Rows */}
+            <div className="space-y-3">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-10">
+                  <div className="w-6 h-6 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mb-3"></div>
+                  <span className="text-[8px] text-emerald-500 font-bold uppercase tracking-widest animate-pulse">
+                    Sinkronisasi Database...
+                  </span>
+                </div>
+              ) : filteredUsers.length === 0 ? (
+                <div className="text-center py-10 text-gray-500 font-bold text-[10px] border border-dashed border-white/10 rounded-[20px]">
+                  Tidak ada data pengguna terdaftar.
+                </div>
+              ) : (
+                filteredUsers.map((u) => (
+                  <div
+                    key={u.id}
+                    className="flex items-center justify-between p-3.5 bg-[#07110a]/50 rounded-[20px] border border-white/5 hover:border-[#2fa84f]/35 hover:bg-white/5 transition-all duration-300 group"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      {/* Avatar colored by role */}
+                      <div className={`w-9 h-9 bg-gradient-to-tr ${
+                        u.role === "ADMIN" ? "from-purple-600/25 to-purple-500/10 text-purple-400 border-purple-500/20" : u.role === "SELLER" ? "from-blue-600/25 to-blue-500/10 text-blue-400 border-blue-500/20" : "from-[#2fa84f]/25 to-[#2fa84f]/10 text-[#4ade80] border-[#2fa84f]/20"
+                      } rounded-full flex items-center justify-center font-black uppercase text-xs border shrink-0`}>
+                        {u.username ? u.username.charAt(0) : "?"}
+                      </div>
+                      
+                      <div className="min-w-0">
+                        <p className="font-bold text-white text-[12px] leading-tight mb-1 truncate">
+                          {u.username}
+                        </p>
+                        <p className="text-[9px] text-gray-500 truncate leading-none">
+                          {u.email}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-4 shrink-0">
+                      <span
+                        className={`text-[8px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider border ${
+                          u.role === "ADMIN" ? "bg-purple-500/10 text-purple-400 border-purple-500/20" : u.role === "SELLER" ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-[#2fa84f]/10 text-[#4ade80] border-[#2fa84f]/20"
+                        }`}
+                      >
+                        {u.role}
+                      </span>
+                      <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[7px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 shrink-0">
+                        <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
+                        Aktif
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </main>
+      </div>
+
+      {/* ── FOOTER ── */}
+      <footer className="bg-transparent py-8 text-center border-t border-white/5 mt-auto relative z-10">
+        <p className="text-gray-600 text-[9px] font-black tracking-[4px] uppercase m-0">
+          © 2026 GREENMARKET INC. ADMINISTRATOR CONSOLE HUB.
+        </p>
+      </footer>
     </div>
   );
 }
